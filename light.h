@@ -15,7 +15,9 @@ namespace light
 	struct LightBufferType
 	{
 		D3DXVECTOR3 lightDirection;
-		float padding;
+		D3DXVECTOR3 lightPosition;
+		D3DXVECTOR3 lightColor;
+		D3DXVECTOR3 lightInView;
 	};
 
 	ID3D11VertexShader* m_vertexShader;
@@ -26,8 +28,8 @@ namespace light
 	ID3D11Buffer* m_lightBuffer;
 
 	void Render(ID3D11DeviceContext* deviceContext, int indexCount, D3DXMATRIX worldMatrix, D3DXMATRIX viewMatrix,
-		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* colorTexture, ID3D11ShaderResourceView* normalTexture,
-		D3DXVECTOR3 lightDirection)
+		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* colorTexture, ID3D11ShaderResourceView* normalTexture, ID3D11ShaderResourceView* positionTexture,
+		D3DXVECTOR3 lightDirection, D3DXVECTOR3 lightPosition, D3DXVECTOR3 lightColor, D3DXVECTOR3 lightInView)
 	{
 		HRESULT hr;
 		D3D11_MAPPED_SUBRESOURCE mappedResource;
@@ -64,6 +66,7 @@ namespace light
 		// Set shader texture resources in the pixel shader.
 		deviceContext->PSSetShaderResources(0, 1, &colorTexture);
 		deviceContext->PSSetShaderResources(1, 1, &normalTexture);
+		deviceContext->PSSetShaderResources(2, 1, &positionTexture);
 
 		// Lock the light constant buffer so it can be written to.
 		V(deviceContext->Map(m_lightBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
@@ -73,8 +76,9 @@ namespace light
 
 		// Copy the lighting variables into the constant buffer.
 		dataPtr2->lightDirection = lightDirection;
-		dataPtr2->padding = 0.0f;
-
+		dataPtr2->lightPosition = lightPosition;
+		dataPtr2->lightColor = lightColor;
+		dataPtr2->lightInView = lightInView;
 		// Unlock the constant buffer.
 		deviceContext->Unmap(m_lightBuffer, 0);
 
@@ -100,6 +104,7 @@ namespace light
 		ID3D11ShaderResourceView* t[1] = { nullptr};
 		deviceContext->PSSetShaderResources(0, 1, t);
 		deviceContext->PSSetShaderResources(1, 1, t);
+		deviceContext->PSSetShaderResources(2, 1, t);
 	}
 
 

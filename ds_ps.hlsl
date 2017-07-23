@@ -29,6 +29,7 @@ struct PixelOutputType
 {
 	float4 color : SV_Target0;
 	float4 normal : SV_Target1;
+	float4 position : SV_Target2;
 };
 
 
@@ -46,5 +47,6 @@ output.color = shaderTexture.Sample(SampleTypeWrap, input.tex);
 // Store the normal for output to the render target.
 output.normal = float4(input.normal, 1.0f);
 
+output.position = (input.position.x/1000, input.position.y/1000, input.position.z/1000);
 return output;
 }

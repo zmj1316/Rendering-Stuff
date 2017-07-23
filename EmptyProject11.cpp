@@ -34,6 +34,7 @@ ID3D11SamplerState* g_pSamLinear = NULL;
 ID3D11ShaderResourceView* g_pTexture = nullptr;
 
 ID3D11DepthStencilState* g_pDepthDisabledStencilState = nullptr;
+ID3D11DepthStencilState* g_pDepthenabledStencilState = nullptr;
 
 ID3D11Buffer* g_pOrthVertexBuffer = NULL;
 ID3D11Buffer* g_pOrthIndexBuffer = NULL;
@@ -214,7 +215,7 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 	D3DXVECTOR3 vecEye(0.0f, 0.0f, -5.0f);
 	D3DXVECTOR3 vecAt(0.0f, 0.0f, 0.0f);
 	g_Camera.SetViewParams(&vecEye, &vecAt);
-	g_Camera.SetRadius(4.0f, 1.5f, fObjectRadius * 10.0f);
+	g_Camera.SetRadius(10.0f, 1.5f, 500);
 	m_baseViewMatrix = *g_Camera.GetViewMatrix();
 	//Vertex Buffer
 	D3D11_BUFFER_DESC bufferDesc;
@@ -331,6 +332,8 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 
 	// Create the state using the device.
 	V(pd3dDevice->CreateDepthStencilState(&depthDisabledStencilDesc, &g_pDepthDisabledStencilState));
+	depthDisabledStencilDesc.DepthEnable = true;
+	V(pd3dDevice->CreateDepthStencilState(&depthDisabledStencilDesc, &g_pDepthenabledStencilState));
 
 	light::InitLight(pd3dDevice);
 
@@ -490,8 +493,8 @@ void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImm
 {
 	deferred::SetRenderTargets(pd3dImmediateContext);
 	deferred::ClearRenderTargets(pd3dImmediateContext, 0, 0, 0, 1);
-	D3DXMATRIX mWorldViewProjection;
-	D3DXVECTOR3 vLightDir;
+	D3DXMATRIX mRotation;
+	D3DXMATRIX mTranslationX, mTranslationZ;
 	D3DXMATRIX mWorld;
 	D3DXMATRIX mView;
 	D3DXMATRIX mProj;
@@ -502,10 +505,19 @@ void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImm
 	UINT stride = sizeof(VERTEX);
 	UINT offset = 0;
 	pd3dImmediateContext->PSSetSamplers(0, 1, &g_pSamLinear);
+
 	pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pVertexBuffer, &stride, &offset);
 	pd3dImmediateContext->IASetIndexBuffer(g_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 	pd3dImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	deferred::Render(pd3dImmediateContext, 36, mWorld, mView, mProj, g_pTexture);
+	for (int i = -10; i < 10; ++i)
+	{
+		D3DXMatrixTranslation(&mTranslationX, 5*i, 0, 0);
+		for (int j = -10; j < 10; ++j)
+		{
+			D3DXMatrixTranslation(&mTranslationZ, 0, 5*j, 0);
+			deferred::Render(pd3dImmediateContext, 36, mWorld*mTranslationX*mTranslationZ, mView, mProj, g_pTexture);
+		}
+	}
 	DXUTSetupD3D11Views(pd3dImmediateContext);
 }
 
@@ -535,7 +547,12 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 	// Set the type of primitive that should be rendered from this vertex buffer, in this case triangles.
 	pd3dImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	light::Render(pd3dImmediateContext, 6, mWorld, m_baseViewMatrix, m_orthoMatrix,
-	              deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1], D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z));
+	              deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1], deferred::m_shaderResourceViewArray[2],
+		D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z),
+		D3DXVECTOR3(0,3,0),
+		D3DXVECTOR3(0.5,0.5,0.8),
+		*g_Camera.GetEyePt());
+	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthenabledStencilState, 1);
 }
 
 //--------------------------------------------------------------------------------------
@@ -669,6 +686,7 @@ void CALLBACK OnD3D11DestroyDevice(void* pUserContext)
 	SAFE_RELEASE(g_pOrthVertexBuffer);
 	SAFE_RELEASE(g_pOrthIndexBuffer);
 	SAFE_RELEASE(g_pDepthDisabledStencilState);
+	SAFE_RELEASE(g_pDepthenabledStencilState);
 	deferred::ReleaseDefferred();
 	light::ReleaseLight();
 }
