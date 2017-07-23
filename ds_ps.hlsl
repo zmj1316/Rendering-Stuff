@@ -47,6 +47,6 @@ output.color = shaderTexture.Sample(SampleTypeWrap, input.tex);
 // Store the normal for output to the render target.
 output.normal = float4(input.normal, 1.0f);
 
-output.position = (input.position.x/1000, input.position.y/1000, input.position.z/1000);
+output.position = input.position * float4(1 / 1000.0f, 1 / 1000.0f, 1 / 1000.0f, 1);
 return output;
 }
