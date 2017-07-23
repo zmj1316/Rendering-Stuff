@@ -21,8 +21,8 @@ cbuffer cbPerObject : register(b0)
 struct VS_INPUT
 {
 	float4 vPosition	: POSITION;
-	//float3 vNormal		: NORMAL;
 	float2 vTexcoord	: TEXCOORD0;
+	float3 vNormal		: NORMAL;
 };
 
 struct VS_OUTPUT
@@ -40,7 +40,7 @@ VS_OUTPUT VSMain(VS_INPUT Input)
 	VS_OUTPUT Output;
 
 	Output.vPosition = mul(Input.vPosition, g_mWorldViewProjection);
-	Output.vNormal = mul(float3(0,1,0), (float3x3)g_mWorld);
+	Output.vNormal = mul(Input.vNormal, (float3x3)g_mWorld);
 	Output.vTexcoord = Input.vTexcoord;
 
 	return Output;

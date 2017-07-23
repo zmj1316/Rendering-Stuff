@@ -403,6 +403,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <None Include="DXUT\Optional\directx.ico" />
+    <ClInclude Include="deferred.h" />
     <ClInclude Include="DXUT\Core\DXUT.h" />
     <ClInclude Include="DXUT\Core\DXUTDevice11.h" />
     <ClInclude Include="DXUT\Core\DXUTDevice9.h" />
@@ -433,8 +434,13 @@
   <ItemGroup>
     <FxCompile Include="BasicHLSL11_PS.hlsl" />
     <FxCompile Include="BasicHLSL11_VS.hlsl" />
+    <FxCompile Include="ds_ps.hlsl" />
+    <FxCompile Include="ds_vs.hlsl" />
+    <FxCompile Include="light_ps.hlsl" />
+    <FxCompile Include="light_vs.hlsl" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="light.h" />
     <CLInclude Include="resource.h" />
     <ResourceCompile Include="EmptyProject11.rc" />
   </ItemGroup>
