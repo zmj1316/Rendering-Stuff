@@ -9,8 +9,7 @@
 cbuffer MatrixBuffer
 {
 	matrix worldMatrix;
-	matrix viewMatrix;
-	matrix projectionMatrix;
+	matrix viewProjMatrix;
 };
 
 
@@ -22,11 +21,13 @@ struct VertexInputType
 	float4 position : POSITION;
 	float2 tex : TEXCOORD0;
 	float3 normal : NORMAL;
+	float3 instancedOffset : TEXCOORD1;
 };
 
 struct PixelInputType
 {
 	float4 position : SV_POSITION;
+	float4 worldPosition : POSITION;
 	float2 tex : TEXCOORD0;
 	float3 normal : NORMAL;
 };
@@ -44,9 +45,11 @@ PixelInputType DeferredVertexShader(VertexInputType input)
 	input.position.w = 1.0f;
 
 	// Calculate the position of the vertex against the world, view, and projection matrices.
-	output.position = mul(input.position, worldMatrix);
-	output.position = mul(output.position, viewMatrix);
-	output.position = mul(output.position, projectionMatrix);
+	output.worldPosition = mul(input.position, worldMatrix);
+	output.worldPosition.x += input.instancedOffset.x;
+	output.worldPosition.y += input.instancedOffset.y;
+	output.worldPosition.z += input.instancedOffset.z;
+	output.position = mul(output.worldPosition, viewProjMatrix);
 
 	// Store the texture coordinates for the pixel shader.
 	output.tex = input.tex;

@@ -11,7 +11,9 @@
 #include "DXUTgui.h"
 #include "DXUTsettingsDlg.h"
 #include "SDKMisc.h"
+#include <random>
 #include <vector>
+#include <iostream>
 using namespace DirectX;
 
 CDXUTDialogResourceManager g_DialogResourceManager; // manager for shared resources of dialogs
@@ -27,6 +29,7 @@ D3DXMATRIX m_baseViewMatrix;
 
 ID3D11InputLayout* g_pVertexLayout11 = NULL;
 ID3D11Buffer* g_pVertexBuffer = NULL;
+ID3D11Buffer* g_pInstanceBuffer = NULL;
 ID3D11Buffer* g_pIndexBuffer = NULL;
 ID3D11VertexShader* g_pVertexShader = NULL;
 ID3D11PixelShader* g_pPixelShader = NULL;
@@ -35,6 +38,7 @@ ID3D11ShaderResourceView* g_pTexture = nullptr;
 
 ID3D11DepthStencilState* g_pDepthDisabledStencilState = nullptr;
 ID3D11DepthStencilState* g_pDepthenabledStencilState = nullptr;
+ID3D11BlendState*		 g_pBlendState = nullptr;
 
 ID3D11Buffer* g_pOrthVertexBuffer = NULL;
 ID3D11Buffer* g_pOrthIndexBuffer = NULL;
@@ -72,7 +76,10 @@ struct VERTEX
 	XMFLOAT2 TexCoord;
 	XMFLOAT3 Normal;
 };
-
+struct InstanceType
+{
+	XMFLOAT3 position;
+};
 //--------------------------------------------------------------------------------------
 // Reject any D3D11 devices that aren't acceptable by returning false
 //--------------------------------------------------------------------------------------
@@ -164,9 +171,9 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 	// Create our vertex input layout
 	const D3D11_INPUT_ELEMENT_DESC layout[] =
 	{
-		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-		{"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 	};
 
 
@@ -269,6 +276,29 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 	DXUT_SetDebugName(g_pVertexBuffer, "VB");
 
 
+	InstanceType instances[1024];
+	for (int i = 0; i < 32; ++i)
+	{
+		srand(abs(i));
+		for (int j = 0; j < 32; ++j)
+		{
+			instances[i * 32 + j].position.x = 5 * (i - 16) + rand()*2.0 / RAND_MAX;
+			instances[i * 32 + j].position.y = 5 * (j - 16) + rand()*2.0 / RAND_MAX;
+			instances[i * 32 + j].position.z = 0;
+		}
+	}
+	ZeroMemory(&bufferDesc, sizeof(bufferDesc));
+
+	bufferDesc.ByteWidth = sizeof(InstanceType) * 1024;
+	bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	bufferDesc.MiscFlags = 0;
+	ZeroMemory(&InitData, sizeof(InitData));
+	InitData.pSysMem = instances;
+	V(pd3dDevice->CreateBuffer(&bufferDesc, &InitData, &g_pInstanceBuffer));
+
+
 	ZeroMemory(&bufferDesc, sizeof(bufferDesc));
 
 	UINT32 indices[] =
@@ -332,8 +362,38 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 
 	// Create the state using the device.
 	V(pd3dDevice->CreateDepthStencilState(&depthDisabledStencilDesc, &g_pDepthDisabledStencilState));
+
 	depthDisabledStencilDesc.DepthEnable = true;
+	depthDisabledStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+	depthDisabledStencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
+	depthDisabledStencilDesc.StencilEnable = true;
+	depthDisabledStencilDesc.StencilReadMask = 0xFF;
+	depthDisabledStencilDesc.StencilWriteMask = 0xFF;
+	depthDisabledStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDisabledStencilDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_REPLACE;
+	depthDisabledStencilDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_ZERO;
+	depthDisabledStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+	depthDisabledStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDisabledStencilDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_ZERO;
+	depthDisabledStencilDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+	depthDisabledStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 	V(pd3dDevice->CreateDepthStencilState(&depthDisabledStencilDesc, &g_pDepthenabledStencilState));
+
+	D3D11_BLEND_DESC blendStateDesc;
+	ZeroMemory(&blendStateDesc, sizeof(D3D11_BLEND_DESC));
+	blendStateDesc.AlphaToCoverageEnable = FALSE;
+	blendStateDesc.IndependentBlendEnable = FALSE;
+	blendStateDesc.RenderTarget[0].BlendEnable = TRUE;
+	blendStateDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+	blendStateDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+	blendStateDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	blendStateDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
+	blendStateDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+	blendStateDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	blendStateDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	
+	V(pd3dDevice->CreateBlendState(&blendStateDesc, &g_pBlendState))
+
 
 	light::InitLight(pd3dDevice);
 
@@ -359,6 +419,8 @@ HRESULT CALLBACK OnD3D11ResizedSwapChain(ID3D11Device* pd3dDevice, IDXGISwapChai
 	g_Camera.SetProjParams(D3DX_PI / 6, fAspectRatio, near_plane, far_plane);
 	g_Camera.SetWindow(pBackBufferSurfaceDesc->Width, pBackBufferSurfaceDesc->Height);
 	g_Camera.SetButtonMasks();
+	g_Camera.SetAttachCameraToModel(false);
+	g_Camera.SetEnablePositionMovement(true);
 
 	g_HUD.SetLocation(pBackBufferSurfaceDesc->Width - 170, 0);
 	g_HUD.SetSize(170, 170);
@@ -491,6 +553,8 @@ void RenderText()
 
 void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmediateContext)
 {
+	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthenabledStencilState, 1);
+
 	deferred::SetRenderTargets(pd3dImmediateContext);
 	deferred::ClearRenderTargets(pd3dImmediateContext, 0, 0, 0, 1);
 	D3DXMATRIX mRotation;
@@ -499,31 +563,41 @@ void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImm
 	D3DXMATRIX mView;
 	D3DXMATRIX mProj;
 	// Set the per object constant data
-	mWorld = g_mCenterMesh * *g_Camera.GetWorldMatrix();
+	mRotation = *g_Camera.GetWorldMatrix();
+	mRotation.m[3][0] = 0;
+	mRotation.m[3][1] = 0;
+	mRotation.m[3][2] = 0;
+	mWorld = g_mCenterMesh * mRotation;
 	mProj = *g_Camera.GetProjMatrix();
 	mView = *g_Camera.GetViewMatrix();
-	UINT stride = sizeof(VERTEX);
-	UINT offset = 0;
+	unsigned int strides[2];
+	unsigned int offsets[2];
+	ID3D11Buffer* bufferPointers[2];
+
+
+	// Set the buffer strides.
+	strides[0] = sizeof(VERTEX);
+	strides[1] = sizeof(InstanceType);
+	// Set the buffer offsets.
+	offsets[0] = 0;
+	offsets[1] = 0;
+
+	// Set the array of pointers to the vertex and instance buffers.
+	bufferPointers[0] = g_pVertexBuffer;
+	bufferPointers[1] = g_pInstanceBuffer;
 	pd3dImmediateContext->PSSetSamplers(0, 1, &g_pSamLinear);
 
-	pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pVertexBuffer, &stride, &offset);
+	pd3dImmediateContext->IASetVertexBuffers(0, 2, bufferPointers, strides, offsets);
 	pd3dImmediateContext->IASetIndexBuffer(g_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 	pd3dImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	for (int i = -10; i < 10; ++i)
-	{
-		D3DXMatrixTranslation(&mTranslationX, 5*i, 0, 0);
-		for (int j = -10; j < 10; ++j)
-		{
-			D3DXMatrixTranslation(&mTranslationZ, 0, 5*j, 0);
-			deferred::Render(pd3dImmediateContext, 36, mWorld*mTranslationX*mTranslationZ, mView, mProj, g_pTexture);
-		}
-	}
+	deferred::Render(pd3dImmediateContext, 36, mWorld, mView, mProj, g_pTexture);
 	DXUTSetupD3D11Views(pd3dImmediateContext);
 }
 
 void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmediateContext)
 {
 	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthDisabledStencilState, 1);
+	pd3dImmediateContext->OMSetBlendState(g_pBlendState,nullptr,0xFFFFFFFF);
 	unsigned int stride;
 	unsigned int offset;
 	D3DXMATRIX mWorldViewProjection;
@@ -531,6 +605,8 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 	D3DXMATRIX mWorld;
 	D3DXMATRIX mView;
 	D3DXMATRIX mProj;
+	mProj = *g_Camera.GetProjMatrix();
+	mView = *g_Camera.GetViewMatrix();
 	// Set the per object constant data
 	mWorld = g_mCenterMesh;
 	vLightDir = g_LightControl.GetLightDirection();
@@ -546,12 +622,29 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 
 	// Set the type of primitive that should be rendered from this vertex buffer, in this case triangles.
 	pd3dImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	light::Render(pd3dImmediateContext, 6, mWorld, m_baseViewMatrix, m_orthoMatrix,
-	              deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1], deferred::m_shaderResourceViewArray[2],
-		D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z),
-		D3DXVECTOR3(0,3,0),
-		D3DXVECTOR3(0.5,0.5,0.8),
-		*g_Camera.GetEyePt());
+	D3DXMATRIX	invViewProj;
+	invViewProj = mView*mProj;
+	D3DXMatrixInverse(&invViewProj, nullptr, &invViewProj);
+
+	for (int i = 0; i < 32; ++i)
+	{
+		srand(i);
+		for (int j = 0; j < 32; ++j)
+		{
+			light::Render(pd3dImmediateContext, 6, mWorld, m_baseViewMatrix, m_orthoMatrix,
+				deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1], deferred::m_shaderResourceViewArray[2],
+				D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z),
+				D3DXVECTOR3((i - 16) * 5, (j - 16) * 5, -4),
+				D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
+				*g_Camera.GetEyePt(),
+				invViewProj);
+		}
+	}
+
+	ID3D11ShaderResourceView* t[1] = { nullptr };
+	pd3dImmediateContext->PSSetShaderResources(0, 1, t);
+	pd3dImmediateContext->PSSetShaderResources(1, 1, t);
+	pd3dImmediateContext->PSSetShaderResources(2, 1, t);
 	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthenabledStencilState, 1);
 }
 
@@ -571,7 +664,7 @@ void CALLBACK OnD3D11FrameRender(ID3D11Device* pd3dDevice, ID3D11DeviceContext* 
 		return;
 	}
 	// Clear render target and the depth stencil 
-	float ClearColor[4] = {0.176f, 0.196f, 0.667f, 0.0f};
+	float ClearColor[4] = {0,0,0, 0.0f};
 
 	ID3D11RenderTargetView* pRTV = DXUTGetD3D11RenderTargetView();
 	ID3D11DepthStencilView* pDSV = DXUTGetD3D11DepthStencilView();
@@ -687,6 +780,8 @@ void CALLBACK OnD3D11DestroyDevice(void* pUserContext)
 	SAFE_RELEASE(g_pOrthIndexBuffer);
 	SAFE_RELEASE(g_pDepthDisabledStencilState);
 	SAFE_RELEASE(g_pDepthenabledStencilState);
+	SAFE_RELEASE(g_pBlendState);
+	SAFE_RELEASE(g_pInstanceBuffer);
 	deferred::ReleaseDefferred();
 	light::ReleaseLight();
 }
@@ -732,6 +827,7 @@ LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
 //--------------------------------------------------------------------------------------
 void CALLBACK OnKeyboard(UINT nChar, bool bKeyDown, bool bAltDown, void* pUserContext)
 {
+
 }
 
 

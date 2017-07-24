@@ -22,10 +22,10 @@ SamplerState SampleTypePoint : register(s0);
 //////////////////////
 cbuffer LightBuffer
 {
-	float3 lightDirection;
-	float3 lightPosition;
-	float3 lightColor;
-	float3 viewPosition;
+	float4 lightDirection;
+	float4 lightPosition;
+	float4 lightColor;
+	float4 viewPosition;
 };
 
 
@@ -46,12 +46,10 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
 {
 	float4 colors;
 	float4 normals;
-	float3 lightDir;
 	float lightIntensity;
 	float4 outputColor;
 	
 	float3 position;
-	float3 pointDir;
 	
 	// Sample the colors from the color render texture using the point sampler at this texture coordinate location.
 	colors = colorTexture.Sample(SampleTypePoint, input.tex);
@@ -59,25 +57,35 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
 	// Sample the normals from the normal render texture using the point sampler at this texture coordinate location.
 	normals = normalTexture.Sample(SampleTypePoint, input.tex);
 	
-	position = positionTexture.Sample(SampleTypePoint, input.tex)*float3(1000,1000,1000);
-	pointDir = position - lightPosition;
-	// Invert the light direction for calculations.
-	lightDir = -lightDirection;
-	
-	// Calculate the amount of light on this pixel.
-	lightIntensity = saturate(dot(normals.xyz, lightDir));
-	
-	float4 diffuse = max(0, dot(normals, lightPosition - position));
-	diffuse = diffuse * colors;
-	
-	float3 H = normalize(viewPosition - position + lightPosition - position);
-	float4 specularColor = float4(0.1, 0.7, 0.1, 1);
-	float4 specular = specularColor * pow(max(0, dot(H, normals)), 2);
-	
-	
-	// Determine the final amount of diffuse color based on the color of the pixel combined with the light intensity.
-	outputColor = saturate(colors * lightIntensity);
-	outputColor += specular;
+	position = positionTexture.Sample(SampleTypePoint, input.tex);
+	outputColor = float4(0,0,0,0);
+
+		float3 lightDir = lightPosition - position; //3D position in space of the surface
+		float distance = length(lightDir);
+		if (distance < 30)
+		{
+
+			lightDir = lightDir / distance; // = normalize( lightDir );
+			distance = distance * distance; //This line may be optimised using Inverse square root
+			
+			float NdotL = dot(normals, lightDir);
+			float intensity = saturate(NdotL);
+
+			float4 diffuse;
+			diffuse = intensity / distance * colors / 4;
+			float3 H = normalize(lightDir + normalize(viewPosition - position));
+
+			float NdotH = dot(normals, H);
+			intensity = pow(saturate(NdotH), 20);
+
+			float4 specularColor = lightColor;
+			float4 specular = intensity* 4 * specularColor / distance;
+		
+		
+			// Determine the final amount of diffuse color based on the color of the pixel combined with the light intensity.
+			//outputColor = saturate(colors * lightIntensity);
+			outputColor += (diffuse + specular);
+		}
 
 	return outputColor;
 }

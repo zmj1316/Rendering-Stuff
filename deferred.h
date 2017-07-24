@@ -16,8 +16,7 @@ namespace deferred
 	struct MatrixBufferType
 	{
 		D3DXMATRIX world;
-		D3DXMATRIX view;
-		D3DXMATRIX projection;
+		D3DXMATRIX viewProj;
 	};
 
 	ID3D11VertexShader* m_vertexShader;
@@ -59,16 +58,19 @@ namespace deferred
 	void Render(ID3D11DeviceContext* deviceContext, int indexCount, D3DXMATRIX worldMatrix, D3DXMATRIX viewMatrix,
 		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* texture)
 	{
+
 		HRESULT hr;
 		D3D11_MAPPED_SUBRESOURCE mappedResource;
 		unsigned int bufferNumber;
 		MatrixBufferType* dataPtr;
-
+		D3DXMATRIX viewProj,invViewProj;
+		viewProj = viewMatrix * projectionMatrix;
+		D3DXMatrixInverse(&invViewProj,nullptr, &viewProj);
 
 		// Transpose the matrices to prepare them for the shader.
 		D3DXMatrixTranspose(&worldMatrix, &worldMatrix);
-		D3DXMatrixTranspose(&viewMatrix, &viewMatrix);
-		D3DXMatrixTranspose(&projectionMatrix, &projectionMatrix);
+		D3DXMatrixTranspose(&viewProj, &viewProj);
+		D3DXMatrixTranspose(&invViewProj, &invViewProj);
 
 		// Lock the constant buffer so it can be written to.
 		V( deviceContext->Map(m_matrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
@@ -78,8 +80,7 @@ namespace deferred
 
 		// Copy the matrices into the constant buffer.
 		dataPtr->world = worldMatrix;
-		dataPtr->view = viewMatrix;
-		dataPtr->projection = projectionMatrix;
+		dataPtr->viewProj = viewProj;
 
 		// Unlock the constant buffer.
 		deviceContext->Unmap(m_matrixBuffer, 0);
@@ -89,6 +90,7 @@ namespace deferred
 
 		// Now set the constant buffer in the vertex shader with the updated values.
 		deviceContext->VSSetConstantBuffers(bufferNumber, 1, &m_matrixBuffer);
+		deviceContext->PSSetConstantBuffers(bufferNumber, 1, &m_matrixBuffer);
 
 		// Set shader texture resource in the pixel shader.
 		deviceContext->PSSetShaderResources(0, 1, &texture);
@@ -105,7 +107,8 @@ namespace deferred
 		deviceContext->PSSetSamplers(0, 1, &m_sampleStateWrap);
 
 		// Render the geometry.
-		deviceContext->DrawIndexed(indexCount, 0, 0);
+//		deviceContext->DrawIndexed(indexCount, 0, 0);
+		deviceContext->DrawIndexedInstanced(indexCount, 1024,0, 0, 0);
 	}
 
 	void ReleaseDefferred();
@@ -210,7 +213,7 @@ namespace deferred
 		ID3D10Blob* errorMessage;
 		ID3D10Blob* vertexShaderBuffer;
 		ID3D10Blob* pixelShaderBuffer;
-		D3D11_INPUT_ELEMENT_DESC polygonLayout[3];
+		D3D11_INPUT_ELEMENT_DESC polygonLayout[4];
 		unsigned int numElements;
 		D3D11_SAMPLER_DESC samplerDesc;
 		D3D11_BUFFER_DESC matrixBufferDesc;
@@ -248,7 +251,7 @@ namespace deferred
 		polygonLayout[1].SemanticIndex = 0;
 		polygonLayout[1].Format = DXGI_FORMAT_R32G32_FLOAT;
 		polygonLayout[1].InputSlot = 0;
-		polygonLayout[1].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
+		polygonLayout[1].AlignedByteOffset = 12;
 		polygonLayout[1].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 		polygonLayout[1].InstanceDataStepRate = 0;
 
@@ -256,9 +259,17 @@ namespace deferred
 		polygonLayout[2].SemanticIndex = 0;
 		polygonLayout[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
 		polygonLayout[2].InputSlot = 0;
-		polygonLayout[2].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
+		polygonLayout[2].AlignedByteOffset = 20;
 		polygonLayout[2].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 		polygonLayout[2].InstanceDataStepRate = 0;
+
+		polygonLayout[3].SemanticName = "TEXCOORD";
+		polygonLayout[3].SemanticIndex = 1;
+		polygonLayout[3].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+		polygonLayout[3].InputSlot = 1;
+		polygonLayout[3].AlignedByteOffset = 0;
+		polygonLayout[3].InputSlotClass = D3D11_INPUT_PER_INSTANCE_DATA;
+		polygonLayout[3].InstanceDataStepRate = 1;
 
 		// Get a count of the elements in the layout.
 		numElements = sizeof(polygonLayout) / sizeof(polygonLayout[0]);

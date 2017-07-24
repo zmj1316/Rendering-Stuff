@@ -14,6 +14,12 @@ Texture2D shaderTexture : register(t0);
 ///////////////////
 SamplerState SampleTypeWrap : register(s0);
 
+cbuffer MatrixBuffer
+{
+	matrix worldMatrix;
+	matrix viewProjMatrix;
+};
+
 
 //////////////
 // TYPEDEFS //
@@ -21,6 +27,7 @@ SamplerState SampleTypeWrap : register(s0);
 struct PixelInputType
 {
 	float4 position : SV_POSITION;
+	float4 worldPosition : POSITION;
 	float2 tex : TEXCOORD0;
 	float3 normal : NORMAL;
 };
@@ -41,12 +48,12 @@ PixelOutputType DeferredPixelShader(PixelInputType input) : SV_TARGET
 	PixelOutputType output;
 
 
-// Sample the color from the texture and store it for output to the render target.
-output.color = shaderTexture.Sample(SampleTypeWrap, input.tex);
-
-// Store the normal for output to the render target.
-output.normal = float4(input.normal, 1.0f);
-
-output.position = input.position * float4(1 / 1000.0f, 1 / 1000.0f, 1 / 1000.0f, 1);
-return output;
+	// Sample the color from the texture and store it for output to the render target.
+	output.color = shaderTexture.Sample(SampleTypeWrap, input.tex);
+	
+	// Store the normal for output to the render target.
+	output.normal = float4(input.normal, 1.0f);
+	
+	output.position = input.worldPosition;
+	return output;
 }

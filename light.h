@@ -2,7 +2,7 @@
 #include <d3dx9.h>
 #include <d3d11.h>
 #include "DXUT.h"
-
+#include <random>
 namespace light
 {
 	struct MatrixBufferType
@@ -14,10 +14,10 @@ namespace light
 
 	struct LightBufferType
 	{
-		D3DXVECTOR3 lightDirection;
-		D3DXVECTOR3 lightPosition;
-		D3DXVECTOR3 lightColor;
-		D3DXVECTOR3 lightInView;
+		D3DXVECTOR4 lightDirection;
+		D3DXVECTOR4 lightPosition;
+		D3DXVECTOR4 lightColor;
+		D3DXVECTOR4 viewPosition;
 	};
 
 	ID3D11VertexShader* m_vertexShader;
@@ -29,7 +29,7 @@ namespace light
 
 	void Render(ID3D11DeviceContext* deviceContext, int indexCount, D3DXMATRIX worldMatrix, D3DXMATRIX viewMatrix,
 		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* colorTexture, ID3D11ShaderResourceView* normalTexture, ID3D11ShaderResourceView* positionTexture,
-		D3DXVECTOR3 lightDirection, D3DXVECTOR3 lightPosition, D3DXVECTOR3 lightColor, D3DXVECTOR3 lightInView)
+		D3DXVECTOR3 lightDirection, D3DXVECTOR3 lightPosition, D3DXVECTOR3 lightColor, D3DXVECTOR3 viewPosition, D3DXMATRIX	invViewProj)
 	{
 		HRESULT hr;
 		D3D11_MAPPED_SUBRESOURCE mappedResource;
@@ -75,10 +75,22 @@ namespace light
 		dataPtr2 = (LightBufferType*)mappedResource.pData;
 
 		// Copy the lighting variables into the constant buffer.
-		dataPtr2->lightDirection = lightDirection;
-		dataPtr2->lightPosition = lightPosition;
-		dataPtr2->lightColor = lightColor;
-		dataPtr2->lightInView = lightInView;
+		D3DXMatrixTranspose(&invViewProj, &invViewProj);
+
+		dataPtr2->lightDirection = D3DXVECTOR4(lightDirection,1);
+		dataPtr2->lightPosition = D3DXVECTOR4(lightPosition, 1);
+		dataPtr2->lightColor = D3DXVECTOR4(lightColor,1);
+
+//		for (int i = 0; i < 32; ++i)
+//		{
+//			srand(i);
+//			for (int j = 0; j < 32; ++j)
+//			{
+//				dataPtr2->lightPosition[i*32 + j] = D3DXVECTOR4((i-16)*5,(j-16)*5,-4,1);
+//				dataPtr2->lightColor[i * 32 + j] = D3DXVECTOR4(0.5*rand()/RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX,1);
+//			}
+//		}
+		dataPtr2->viewPosition = D3DXVECTOR4(viewPosition,1);
 		// Unlock the constant buffer.
 		deviceContext->Unmap(m_lightBuffer, 0);
 
@@ -101,10 +113,6 @@ namespace light
 		// Render the geometry.
 		deviceContext->DrawIndexed(indexCount, 0, 0);
 
-		ID3D11ShaderResourceView* t[1] = { nullptr};
-		deviceContext->PSSetShaderResources(0, 1, t);
-		deviceContext->PSSetShaderResources(1, 1, t);
-		deviceContext->PSSetShaderResources(2, 1, t);
 	}
 
 
