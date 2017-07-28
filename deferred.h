@@ -16,7 +16,8 @@ namespace deferred
 	struct MatrixBufferType
 	{
 		D3DXMATRIX world;
-		D3DXMATRIX viewProj;
+		D3DXMATRIX view;
+		D3DXMATRIX projection;
 	};
 
 	ID3D11VertexShader* m_vertexShader;
@@ -63,14 +64,14 @@ namespace deferred
 		D3D11_MAPPED_SUBRESOURCE mappedResource;
 		unsigned int bufferNumber;
 		MatrixBufferType* dataPtr;
-		D3DXMATRIX viewProj,invViewProj;
-		viewProj = viewMatrix * projectionMatrix;
-		D3DXMatrixInverse(&invViewProj,nullptr, &viewProj);
+//		D3DXMATRIX viewProj,invViewProj;
+//		viewProj = viewMatrix * projectionMatrix;
+//		D3DXMatrixInverse(&invViewProj,nullptr, &viewProj);
 
 		// Transpose the matrices to prepare them for the shader.
 		D3DXMatrixTranspose(&worldMatrix, &worldMatrix);
-		D3DXMatrixTranspose(&viewProj, &viewProj);
-		D3DXMatrixTranspose(&invViewProj, &invViewProj);
+		D3DXMatrixTranspose(&viewMatrix, &viewMatrix);
+		D3DXMatrixTranspose(&projectionMatrix, &projectionMatrix);
 
 		// Lock the constant buffer so it can be written to.
 		V( deviceContext->Map(m_matrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
@@ -80,7 +81,8 @@ namespace deferred
 
 		// Copy the matrices into the constant buffer.
 		dataPtr->world = worldMatrix;
-		dataPtr->viewProj = viewProj;
+		dataPtr->view = viewMatrix;
+		dataPtr->projection = projectionMatrix;
 
 		// Unlock the constant buffer.
 		deviceContext->Unmap(m_matrixBuffer, 0);

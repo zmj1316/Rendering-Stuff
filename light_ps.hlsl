@@ -26,6 +26,7 @@ cbuffer LightBuffer
 	float4 lightPosition;
 	float4 lightColor;
 	float4 viewPosition;
+	matrix invView;
 };
 
 
@@ -35,6 +36,7 @@ cbuffer LightBuffer
 struct PixelInputType
 {
 	float4 position : SV_POSITION;
+	float3 view_dir  : POSITION;
 	float2 tex : TEXCOORD0;
 };
 
@@ -47,7 +49,7 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
 	//return (1,1,1,1);
 	float4 colors;
 	float4 normals;
-	float4 normal;
+	float3 normal;
 	float lightIntensity;
 	float4 outputColor;
 	
@@ -61,8 +63,12 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
 	normal = normals;
 	position = positionTexture.Sample(SampleTypePoint, input.tex);
 	outputColor = float4(0, 0, 0, 0);
-	//float depth = position.z;
-	//outputColor = float4(position,1);
+	//float depth = normals.x * 500;
+	////outputColor = float4(depth, depth, depth,1);
+	//position = input.view_dir * (depth / input.view_dir.z);
+
+	//position = mul(position, invView);
+	//outputColor = float4(position / 500,1);
 	//return outputColor;
 
 		float3 lightDir = lightPosition - position; //3D position in space of the surface

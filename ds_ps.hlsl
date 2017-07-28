@@ -27,7 +27,7 @@ cbuffer MatrixBuffer
 struct PixelInputType
 {
 	float4 position : SV_POSITION;
-	float4 depthPosition : TEXTURE0;
+	float4 depthPosition : POSITION;
 	float2 tex : TEXCOORD0;
 	float3 normal : NORMAL;
 };
@@ -50,9 +50,9 @@ PixelOutputType DeferredPixelShader(PixelInputType input) : SV_TARGET
 
 	// Sample the color from the texture and store it for output to the render target.
 	output.color = shaderTexture.Sample(SampleTypeWrap, input.tex);
-	float depthValue = input.depthPosition.z / input.depthPosition.w;
+	float depthValue = input.depthPosition.z / 500;
 	// Store the normal for output to the render target.
-	output.normal = float4(input.normal,1);
+	output.normal = float4(input.normal, depthValue);
 	
 	output.position = input.depthPosition;
 	return output;

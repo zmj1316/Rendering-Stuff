@@ -648,9 +648,9 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 
 	// Set the type of primitive that should be rendered from this vertex buffer, in this case triangles.
 	pd3dImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	D3DXMATRIX	invViewProj;
-	invViewProj = mView*mProj;
-	D3DXMatrixInverse(&invViewProj, nullptr, &invViewProj);
+	D3DXMATRIX	invProj;
+	invProj = mProj;
+	D3DXMatrixInverse(&invProj, nullptr, &invProj);
 	const int length = 32;
 	for (int i = 0; i < length; ++i)
 	{
@@ -671,7 +671,7 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 				D3DXVECTOR3((i - length / 2) * 5, (j - length / 2) * 5, -3),
 				D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
 				*g_Camera.GetEyePt(),
-				invViewProj);
+				invProj);
 
 			// Set the vertex buffer to active in the input assembler so it can be rendered.
 			pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pOrthVertexBuffer, &stride, &offset);
@@ -688,7 +688,7 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 				D3DXVECTOR3((i - length/2) * 5, (j - length/2) * 5, -3),
 				D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
 				*g_Camera.GetEyePt(),
-				invViewProj);
+				invProj,mView);
 		}
 	}
 

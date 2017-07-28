@@ -9,7 +9,8 @@
 cbuffer MatrixBuffer
 {
 	matrix worldMatrix;
-	matrix viewProjMatrix;
+	matrix viewMatrix;
+	matrix projMatrix;
 };
 
 
@@ -27,7 +28,7 @@ struct VertexInputType
 struct PixelInputType
 {
 	float4 position : SV_POSITION;
-	float4 depthPosition : TEXTURE0;
+	float4 depthPosition : POSITION;
 	float2 tex : TEXCOORD0;
 	float3 normal : NORMAL;
 };
@@ -49,8 +50,9 @@ PixelInputType DeferredVertexShader(VertexInputType input)
 	worldPosition.x += input.instancedOffset.x;
 	worldPosition.y += input.instancedOffset.y;
 	worldPosition.z += input.instancedOffset.z;
-	output.position = mul(worldPosition, viewProjMatrix);
+	output.position = mul(worldPosition, viewMatrix);
 	output.depthPosition = worldPosition;
+	output.position = mul(output.position, projMatrix);
 	// Store the texture coordinates for the pixel shader.
 	output.tex = input.tex;
 

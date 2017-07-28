@@ -10,6 +10,7 @@ namespace light
 		D3DXMATRIX world;
 		D3DXMATRIX view;
 		D3DXMATRIX projection;
+		D3DXMATRIX invView;
 	};
 
 	struct LightBufferType
@@ -18,6 +19,7 @@ namespace light
 		D3DXVECTOR4 lightPosition;
 		D3DXVECTOR4 lightColor;
 		D3DXVECTOR4 viewPosition;
+		D3DXMATRIX  invView;
 	};
 
 	ID3D11VertexShader* m_vertexShader;
@@ -89,7 +91,7 @@ namespace light
 
 	void Render(ID3D11DeviceContext* deviceContext, int indexCount, D3DXMATRIX worldMatrix, D3DXMATRIX viewMatrix,
 		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* colorTexture, ID3D11ShaderResourceView* normalTexture, ID3D11ShaderResourceView* positionTexture,
-		D3DXVECTOR3 lightDirection, D3DXVECTOR3 lightPosition, D3DXVECTOR3 lightColor, D3DXVECTOR3 viewPosition, D3DXMATRIX	invViewProj)
+		D3DXVECTOR3 lightDirection, D3DXVECTOR3 lightPosition, D3DXVECTOR3 lightColor, D3DXVECTOR3 viewPosition, D3DXMATRIX	invProj,D3DXMATRIX	gView)
 	{
 		HRESULT hr;
 		D3D11_MAPPED_SUBRESOURCE mappedResource;
@@ -135,12 +137,15 @@ namespace light
 		dataPtr2 = (LightBufferType*)mappedResource.pData;
 
 		// Copy the lighting variables into the constant buffer.
-		D3DXMatrixTranspose(&invViewProj, &invViewProj);
-
+		D3DXMatrixTranspose(&invProj, &invProj);
 		dataPtr2->lightDirection = D3DXVECTOR4(lightDirection,1);
 		dataPtr2->lightPosition = D3DXVECTOR4(lightPosition, 1);
 		dataPtr2->lightColor = D3DXVECTOR4(lightColor,1);
+		D3DXMatrixInverse(&gView, nullptr, &gView);
+		D3DXMatrixTranspose(&gView, &gView);
 
+		dataPtr->invView = gView;
+		dataPtr2->invView = gView;
 //		for (int i = 0; i < 32; ++i)
 //		{
 //			srand(i);

@@ -11,6 +11,7 @@ cbuffer MatrixBuffer
 	matrix worldMatrix;
 	matrix viewMatrix;
 	matrix projectionMatrix;
+	matrix invView;
 };
 
 
@@ -26,6 +27,7 @@ struct VertexInputType
 struct PixelInputType
 {
 	float4 position : SV_POSITION;
+	float3 view_dir  : POSITION;
 	float2 tex : TEXCOORD0;
 };
 
@@ -44,6 +46,8 @@ PixelInputType LightVertexShader(VertexInputType input)
 	// Calculate the position of the vertex against the world, view, and projection matrices.
 	output.position = mul(input.position, worldMatrix);
 	output.position = mul(output.position, viewMatrix);
+	output.view_dir = output.position;
+	//output.view_dir = mul(output.view_dir, (float3x3)invView);
 	output.position = mul(output.position, projectionMatrix);
 
 	// Store the texture coordinates for the pixel shader.
