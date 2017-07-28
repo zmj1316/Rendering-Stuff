@@ -40,6 +40,37 @@ ID3D11DepthStencilState* g_pDepthDisabledStencilState = nullptr;
 ID3D11DepthStencilState* g_pDepthenabledStencilState = nullptr;
 ID3D11BlendState*		 g_pBlendState = nullptr;
 
+
+// Stored states
+ID3D11DepthStencilState* m_pDepthStencilStateStored11;
+UINT m_StencilRefStored11;
+ID3D11RasterizerState* m_pRasterizerStateStored11;
+ID3D11BlendState* m_pBlendStateStored11;
+float m_BlendFactorStored11[4];
+UINT m_SampleMaskStored11;
+ID3D11SamplerState* m_pSamplerStateStored11;
+
+void StoreD3D11State(ID3D11DeviceContext* pd3dImmediateContext)
+{
+	pd3dImmediateContext->OMGetDepthStencilState(&m_pDepthStencilStateStored11, &m_StencilRefStored11);
+	pd3dImmediateContext->RSGetState(&m_pRasterizerStateStored11);
+	pd3dImmediateContext->OMGetBlendState(&m_pBlendStateStored11, m_BlendFactorStored11, &m_SampleMaskStored11);
+	pd3dImmediateContext->PSGetSamplers(0, 1, &m_pSamplerStateStored11);
+}
+
+void RestoreD3D11State(ID3D11DeviceContext* pd3dImmediateContext)
+{
+	pd3dImmediateContext->OMSetDepthStencilState(m_pDepthStencilStateStored11, m_StencilRefStored11);
+	pd3dImmediateContext->RSSetState(m_pRasterizerStateStored11);
+	pd3dImmediateContext->OMSetBlendState(m_pBlendStateStored11, m_BlendFactorStored11, m_SampleMaskStored11);
+	pd3dImmediateContext->PSSetSamplers(0, 1, &m_pSamplerStateStored11);
+
+	SAFE_RELEASE(m_pDepthStencilStateStored11);
+	SAFE_RELEASE(m_pRasterizerStateStored11);
+	SAFE_RELEASE(m_pBlendStateStored11);
+	SAFE_RELEASE(m_pSamplerStateStored11);
+}
+
 ID3D11Buffer* g_pOrthVertexBuffer = NULL;
 ID3D11Buffer* g_pOrthIndexBuffer = NULL;
 #include "deferred.h"
@@ -348,7 +379,7 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 	depthDisabledStencilDesc.DepthEnable = false;
 	depthDisabledStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 	depthDisabledStencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
-	depthDisabledStencilDesc.StencilEnable = true;
+	depthDisabledStencilDesc.StencilEnable = false;
 	depthDisabledStencilDesc.StencilReadMask = 0xFF;
 	depthDisabledStencilDesc.StencilWriteMask = 0xFF;
 	depthDisabledStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
@@ -370,12 +401,12 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 	depthDisabledStencilDesc.StencilReadMask = 0xFF;
 	depthDisabledStencilDesc.StencilWriteMask = 0xFF;
 	depthDisabledStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-	depthDisabledStencilDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_REPLACE;
-	depthDisabledStencilDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_ZERO;
+	depthDisabledStencilDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+	depthDisabledStencilDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
 	depthDisabledStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 	depthDisabledStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-	depthDisabledStencilDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_ZERO;
-	depthDisabledStencilDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+	depthDisabledStencilDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+	depthDisabledStencilDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
 	depthDisabledStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 	V(pd3dDevice->CreateDepthStencilState(&depthDisabledStencilDesc, &g_pDepthenabledStencilState));
 
@@ -415,7 +446,7 @@ HRESULT CALLBACK OnD3D11ResizedSwapChain(ID3D11Device* pd3dDevice, IDXGISwapChai
 	// Setup the camera's projection parameters
 	float fAspectRatio = pBackBufferSurfaceDesc->Width / (FLOAT)pBackBufferSurfaceDesc->Height;
 	float near_plane = 0.005f;
-	float far_plane = 1000;
+	float far_plane = 500;
 	g_Camera.SetProjParams(D3DX_PI / 6, fAspectRatio, near_plane, far_plane);
 	g_Camera.SetWindow(pBackBufferSurfaceDesc->Width, pBackBufferSurfaceDesc->Height);
 	g_Camera.SetButtonMasks();
@@ -614,27 +645,47 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 	stride = sizeof(VERTEX);
 	offset = 0;
 
-	// Set the vertex buffer to active in the input assembler so it can be rendered.
-	pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pOrthVertexBuffer, &stride, &offset);
-
-	// Set the index buffer to active in the input assembler so it can be rendered.
-	pd3dImmediateContext->IASetIndexBuffer(g_pOrthIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
 	// Set the type of primitive that should be rendered from this vertex buffer, in this case triangles.
 	pd3dImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	D3DXMATRIX	invViewProj;
 	invViewProj = mView*mProj;
 	D3DXMatrixInverse(&invViewProj, nullptr, &invViewProj);
-
-	for (int i = 0; i < 32; ++i)
+	const int length = 32;
+	for (int i = 0; i < length; ++i)
 	{
 		srand(i);
-		for (int j = 0; j < 32; ++j)
+		for (int j = 0; j < length; ++j)
 		{
-			light::Render(pd3dImmediateContext, 6, mWorld, m_baseViewMatrix, m_orthoMatrix,
-				deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1], deferred::m_shaderResourceViewArray[2],
+			ID3D11DepthStencilView* pDSV = DXUTGetD3D11DepthStencilView();
+			pd3dImmediateContext->ClearDepthStencilView(pDSV, D3D11_CLEAR_STENCIL, 1.0, 0xFF);
+			// Set the vertex buffer to active in the input assembler so it can be rendered.
+			pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pVertexBuffer, &stride, &offset);
+
+			// Set the index buffer to active in the input assembler so it can be rendered.
+			pd3dImmediateContext->IASetIndexBuffer(g_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+			light::LV_pass(pd3dImmediateContext, 36, mWorld, mView, mProj,
+				deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1],
+				deferred::m_shaderResourceViewArray[2],
 				D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z),
-				D3DXVECTOR3((i - 16) * 5, (j - 16) * 5, -4),
+				D3DXVECTOR3((i - length / 2) * 5, (j - length / 2) * 5, -3),
+				D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
+				*g_Camera.GetEyePt(),
+				invViewProj);
+
+			// Set the vertex buffer to active in the input assembler so it can be rendered.
+			pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pOrthVertexBuffer, &stride, &offset);
+
+			// Set the index buffer to active in the input assembler so it can be rendered.
+			pd3dImmediateContext->IASetIndexBuffer(g_pOrthIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	
+			float ClearColor[4] = { 0,0,0, 0.0f };
+
+			light::Render(pd3dImmediateContext, 6, mWorld, m_baseViewMatrix, m_orthoMatrix,
+				deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1], 
+					deferred::m_shaderResourceViewArray[2],
+				D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z),
+				D3DXVECTOR3((i - length/2) * 5, (j - length/2) * 5, -3),
 				D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
 				*g_Camera.GetEyePt(),
 				invViewProj);
@@ -656,7 +707,6 @@ void CALLBACK OnD3D11FrameRender(ID3D11Device* pd3dDevice, ID3D11DeviceContext* 
 {
 	HRESULT hr;
 
-
 	// If the settings dialog is being shown, then render it instead of rendering the app's scene
 	if (g_D3DSettingsDlg.IsActive())
 	{
@@ -670,8 +720,10 @@ void CALLBACK OnD3D11FrameRender(ID3D11Device* pd3dDevice, ID3D11DeviceContext* 
 	ID3D11DepthStencilView* pDSV = DXUTGetD3D11DepthStencilView();
 	pd3dImmediateContext->ClearRenderTargetView(pRTV, ClearColor);
 	pd3dImmediateContext->ClearDepthStencilView(pDSV, D3D11_CLEAR_DEPTH, 1.0, 0);
+	StoreD3D11State(pd3dImmediateContext);
 	RenderSceneToTexture(pd3dDevice, pd3dImmediateContext);
 	RenderFullScreen(pd3dDevice, pd3dImmediateContext);
+	RestoreD3D11State(pd3dImmediateContext);
 	if(false){
 		D3DXMATRIX mWorldViewProjection;
 		D3DXVECTOR3 vLightDir;

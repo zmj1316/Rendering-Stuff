@@ -27,6 +27,66 @@ namespace light
 	ID3D11Buffer* m_matrixBuffer;
 	ID3D11Buffer* m_lightBuffer;
 
+	ID3D11DepthStencilState* LVState0 = nullptr;
+	ID3D11DepthStencilState* LVState1 = nullptr;
+	ID3D11DepthStencilState* LVState2 = nullptr;
+
+	ID3D11RasterizerState* front_state = nullptr;
+	ID3D11RasterizerState* back_state = nullptr;
+
+	void LV_pass(ID3D11DeviceContext* deviceContext, int indexCount, D3DXMATRIX worldMatrix, D3DXMATRIX viewMatrix,
+		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* colorTexture, ID3D11ShaderResourceView* normalTexture, ID3D11ShaderResourceView* positionTexture,
+		D3DXVECTOR3 lightDirection, D3DXVECTOR3 lightPosition, D3DXVECTOR3 lightColor, D3DXVECTOR3 viewPosition, D3DXMATRIX	invViewProj)
+
+	{
+		HRESULT hr;
+		deviceContext->VSSetShader(m_vertexShader, NULL, 0);
+		deviceContext->PSSetShader(nullptr, NULL, 0);
+		D3DXMATRIX scale,translation;
+		D3DXMatrixScaling(&scale, 5, 5, 5);
+		D3DXMatrixTranslation(&translation, lightPosition.x, lightPosition.y, lightPosition.z);
+		worldMatrix = scale * translation * worldMatrix;
+		// Transpose the matrices to prepare them for the shader.
+		D3DXMatrixTranspose(&worldMatrix, &worldMatrix);
+		D3DXMatrixTranspose(&viewMatrix, &viewMatrix);
+		D3DXMatrixTranspose(&projectionMatrix, &projectionMatrix);
+		D3D11_MAPPED_SUBRESOURCE mappedResource;
+
+		// Lock the constant buffer so it can be written to.
+		V(deviceContext->Map(m_matrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+
+		unsigned int bufferNumber;
+
+		MatrixBufferType* dataPtr;
+
+		// Get a pointer to the data in the constant buffer.
+		dataPtr = (MatrixBufferType*)mappedResource.pData;
+
+//		// Copy the matrices into the constant buffer.
+//		D3DXMatrixTranslation(&dataPtr->world, lightPosition.x, lightPosition.y, lightPosition.z);
+		dataPtr->world = worldMatrix;
+		dataPtr->view = viewMatrix;
+		dataPtr->projection = projectionMatrix;
+
+		// Unlock the constant buffer.
+		deviceContext->Unmap(m_matrixBuffer, 0);
+
+		// Set the position of the constant buffer in the vertex shader.
+		bufferNumber = 0;
+
+		// Now set the constant buffer in the vertex shader with the updated values.
+		deviceContext->VSSetConstantBuffers(bufferNumber, 1, &m_matrixBuffer);
+
+		deviceContext->RSSetState(back_state);
+		deviceContext->OMSetDepthStencilState(LVState0, 0xFF);
+		deviceContext->DrawIndexed(indexCount, 0, 0);
+		deviceContext->RSSetState(front_state);
+		deviceContext->OMSetDepthStencilState(LVState1, 0);
+		deviceContext->DrawIndexed(indexCount, 0, 0);
+//		deviceContext->RSSetState(front_state);
+	}
+
+
 	void Render(ID3D11DeviceContext* deviceContext, int indexCount, D3DXMATRIX worldMatrix, D3DXMATRIX viewMatrix,
 		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* colorTexture, ID3D11ShaderResourceView* normalTexture, ID3D11ShaderResourceView* positionTexture,
 		D3DXVECTOR3 lightDirection, D3DXVECTOR3 lightPosition, D3DXVECTOR3 lightColor, D3DXVECTOR3 viewPosition, D3DXMATRIX	invViewProj)
@@ -109,6 +169,7 @@ namespace light
 
 		// Set the sampler state in the pixel shader.
 		deviceContext->PSSetSamplers(0, 1, &m_sampleState);
+		deviceContext->OMSetDepthStencilState(LVState2, 0);
 
 		// Render the geometry.
 		deviceContext->DrawIndexed(indexCount, 0, 0);
@@ -220,6 +281,73 @@ namespace light
 
 		// Create the constant buffer pointer so we can access the pixel shader constant buffer from within this class.
 		V(device->CreateBuffer(&lightBufferDesc, NULL, &m_lightBuffer));
+
+		D3D11_DEPTH_STENCIL_DESC LVdesc;
+		LVdesc.DepthEnable = true;
+		LVdesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+		LVdesc.DepthFunc = D3D11_COMPARISON_LESS;
+		LVdesc.StencilEnable = true;
+		LVdesc.StencilReadMask = 0xFF;
+		LVdesc.StencilWriteMask = 0xFF;
+		LVdesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+		LVdesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_ZERO;
+		LVdesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		LVdesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		LVdesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		LVdesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+		LVdesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+		LVdesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		V(device->CreateDepthStencilState(&LVdesc, &LVState0));
+
+		LVdesc.DepthEnable = true;
+		LVdesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+		LVdesc.DepthFunc = D3D11_COMPARISON_LESS;
+		LVdesc.StencilEnable = true;
+		LVdesc.StencilReadMask = 0xFF;
+		LVdesc.StencilWriteMask = 0xFF;
+		LVdesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INVERT;
+		LVdesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		LVdesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+		LVdesc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+//		LVdesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_REPLACE;
+//		LVdesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR_SAT;
+//		LVdesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+//		LVdesc.BackFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+		V(device->CreateDepthStencilState(&LVdesc, &LVState1));
+
+		LVdesc.DepthEnable = false;
+		LVdesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+		LVdesc.DepthFunc = D3D11_COMPARISON_LESS;
+		LVdesc.StencilEnable = true;
+		LVdesc.StencilReadMask = 0xFF;
+		LVdesc.StencilWriteMask = 0xFF;
+		LVdesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		LVdesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_REPLACE;
+		LVdesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_ZERO;
+		LVdesc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+		LVdesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		LVdesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_ZERO;
+		LVdesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+		LVdesc.BackFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+		V(device->CreateDepthStencilState(&LVdesc, &LVState2));
+
+		D3D11_RASTERIZER_DESC rasterDesc;
+		rasterDesc.AntialiasedLineEnable = false;
+		rasterDesc.CullMode = D3D11_CULL_BACK;
+		rasterDesc.DepthBias = 0;
+		rasterDesc.DepthBiasClamp = 0.0f;
+		rasterDesc.DepthClipEnable = true;
+		rasterDesc.FillMode = D3D11_FILL_SOLID;
+		rasterDesc.FrontCounterClockwise = false;
+		rasterDesc.MultisampleEnable = false;
+		rasterDesc.ScissorEnable = false;
+		rasterDesc.SlopeScaledDepthBias = 0.0f;
+		V(device->CreateRasterizerState(&rasterDesc, &front_state));
+		rasterDesc.FrontCounterClockwise = true;
+		V(device->CreateRasterizerState(&rasterDesc, &back_state));
+
+
+
 	}
 
 	void ReleaseLight()
@@ -265,5 +393,10 @@ namespace light
 			m_vertexShader->Release();
 			m_vertexShader = 0;
 		}
+		SAFE_RELEASE(LVState0);
+		SAFE_RELEASE(LVState1);
+		SAFE_RELEASE(LVState2);
+		SAFE_RELEASE(front_state);
+		SAFE_RELEASE(back_state);
 	}
 }

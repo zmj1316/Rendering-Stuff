@@ -28,7 +28,7 @@ namespace deferred
 	void SetRenderTargets(ID3D11DeviceContext* deviceContext)
 	{
 		// Bind the render target view array and depth stencil buffer to the output render pipeline.
-		deviceContext->OMSetRenderTargets(BUFFER_COUNT, m_renderTargetViewArray, m_depthStencilView);
+		deviceContext->OMSetRenderTargets(BUFFER_COUNT, m_renderTargetViewArray, DXUTGetD3D11DepthStencilView());
 
 		// Set the viewport.
 		deviceContext->RSSetViewports(1, &m_viewport);
@@ -52,7 +52,7 @@ namespace deferred
 		}
 
 		// Clear the depth buffer.
-		deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+		deviceContext->ClearDepthStencilView(DXUTGetD3D11DepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 	}
 
 	void Render(ID3D11DeviceContext* deviceContext, int indexCount, D3DXMATRIX worldMatrix, D3DXMATRIX viewMatrix,
@@ -180,11 +180,11 @@ namespace deferred
 		depthBufferDesc.Height = textureHeight;
 		depthBufferDesc.MipLevels = 1;
 		depthBufferDesc.ArraySize = 1;
-		depthBufferDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+		depthBufferDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 		depthBufferDesc.SampleDesc.Count = 1;
 		depthBufferDesc.SampleDesc.Quality = 0;
 		depthBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-		depthBufferDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+		depthBufferDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 		depthBufferDesc.CPUAccessFlags = 0;
 		depthBufferDesc.MiscFlags = 0;
 
