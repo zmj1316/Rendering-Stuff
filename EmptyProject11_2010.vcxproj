@@ -402,6 +402,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="shadow.h" />
     <None Include="DXUT\Optional\directx.ico" />
     <ClInclude Include="deferred.h" />
     <ClInclude Include="DXUT\Core\DXUT.h" />
@@ -434,6 +435,8 @@
   <ItemGroup>
     <FxCompile Include="BasicHLSL11_PS.hlsl" />
     <FxCompile Include="BasicHLSL11_VS.hlsl" />
+    <FxCompile Include="depth_ps.hlsl" />
+    <FxCompile Include="depth_vs.hlsl" />
     <FxCompile Include="ds_ps.hlsl" />
     <FxCompile Include="ds_vs.hlsl" />
     <FxCompile Include="light_ps.hlsl" />

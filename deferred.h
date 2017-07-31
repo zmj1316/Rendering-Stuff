@@ -1,7 +1,7 @@
 #pragma once
 #include <d3d11.h>
 #include "DXUT.h"
-
+#define LENGTH 10
 namespace deferred
 {
 	constexpr int BUFFER_COUNT = 3;
@@ -60,13 +60,12 @@ namespace deferred
 		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* texture)
 	{
 
+		SetRenderTargets(deviceContext);
+		ClearRenderTargets(deviceContext, 0, 0, 0, 1);
 		HRESULT hr;
 		D3D11_MAPPED_SUBRESOURCE mappedResource;
 		unsigned int bufferNumber;
 		MatrixBufferType* dataPtr;
-//		D3DXMATRIX viewProj,invViewProj;
-//		viewProj = viewMatrix * projectionMatrix;
-//		D3DXMatrixInverse(&invViewProj,nullptr, &viewProj);
 
 		// Transpose the matrices to prepare them for the shader.
 		D3DXMatrixTranspose(&worldMatrix, &worldMatrix);
@@ -110,7 +109,7 @@ namespace deferred
 
 		// Render the geometry.
 //		deviceContext->DrawIndexed(indexCount, 0, 0);
-		deviceContext->DrawIndexedInstanced(indexCount, 1024,0, 0, 0);
+		deviceContext->DrawIndexedInstanced(indexCount, LENGTH * LENGTH, 0, 0, 0);
 	}
 
 	void ReleaseDefferred();
@@ -267,7 +266,7 @@ namespace deferred
 
 		polygonLayout[3].SemanticName = "TEXCOORD";
 		polygonLayout[3].SemanticIndex = 1;
-		polygonLayout[3].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+		polygonLayout[3].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 		polygonLayout[3].InputSlot = 1;
 		polygonLayout[3].AlignedByteOffset = 0;
 		polygonLayout[3].InputSlotClass = D3D11_INPUT_PER_INSTANCE_DATA;

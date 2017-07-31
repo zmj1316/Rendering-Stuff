@@ -3,6 +3,8 @@
 #include <d3d11.h>
 #include "DXUT.h"
 #include <random>
+#include "shadow.h"
+
 namespace light
 {
 	struct MatrixBufferType
@@ -20,6 +22,8 @@ namespace light
 		D3DXVECTOR4 lightColor;
 		D3DXVECTOR4 viewPosition;
 		D3DXMATRIX  invView;
+		D3DXMATRIX lightView;
+		D3DXMATRIX lightProjection;
 	};
 
 	ID3D11VertexShader* m_vertexShader;
@@ -36,6 +40,9 @@ namespace light
 	ID3D11RasterizerState* front_state = nullptr;
 	ID3D11RasterizerState* back_state = nullptr;
 
+	ID3D11SamplerState* m_sampleStateWrap;
+	ID3D11SamplerState* m_sampleStateClamp;
+
 	void LV_pass(ID3D11DeviceContext* deviceContext, int indexCount, D3DXMATRIX worldMatrix, D3DXMATRIX viewMatrix,
 		D3DXMATRIX projectionMatrix, ID3D11ShaderResourceView* colorTexture, ID3D11ShaderResourceView* normalTexture, ID3D11ShaderResourceView* positionTexture,
 		D3DXVECTOR3 lightDirection, D3DXVECTOR3 lightPosition, D3DXVECTOR3 lightColor, D3DXVECTOR3 viewPosition, D3DXMATRIX	invViewProj)
@@ -45,7 +52,7 @@ namespace light
 		deviceContext->VSSetShader(m_vertexShader, NULL, 0);
 		deviceContext->PSSetShader(nullptr, NULL, 0);
 		D3DXMATRIX scale,translation;
-		D3DXMatrixScaling(&scale, 5, 5, 5);
+		D3DXMatrixScaling(&scale, 40, 40, 40);
 		D3DXMatrixTranslation(&translation, lightPosition.x, lightPosition.y, lightPosition.z);
 		worldMatrix = scale * translation * worldMatrix;
 		// Transpose the matrices to prepare them for the shader.
@@ -129,6 +136,7 @@ namespace light
 		deviceContext->PSSetShaderResources(0, 1, &colorTexture);
 		deviceContext->PSSetShaderResources(1, 1, &normalTexture);
 		deviceContext->PSSetShaderResources(2, 1, &positionTexture);
+		deviceContext->PSSetShaderResources(3, 1, &shadow::m_shaderResourceView);
 
 		// Lock the light constant buffer so it can be written to.
 		V(deviceContext->Map(m_lightBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
@@ -143,6 +151,11 @@ namespace light
 		dataPtr2->lightColor = D3DXVECTOR4(lightColor,1);
 		D3DXMatrixInverse(&gView, nullptr, &gView);
 		D3DXMatrixTranspose(&gView, &gView);
+		dataPtr2->lightView = shadow::GetViewMatrix();
+		D3DXMatrixTranspose(&dataPtr2->lightView, &dataPtr2->lightView);
+
+		dataPtr2->lightProjection = shadow::GetProjMatrix();
+		D3DXMatrixTranspose(&dataPtr2->lightProjection, &dataPtr2->lightProjection);
 
 		dataPtr->invView = gView;
 		dataPtr2->invView = gView;
@@ -174,7 +187,10 @@ namespace light
 
 		// Set the sampler state in the pixel shader.
 		deviceContext->PSSetSamplers(0, 1, &m_sampleState);
-		deviceContext->OMSetDepthStencilState(LVState2, 0);
+		// Set the sampler states in the pixel shader.
+		deviceContext->PSSetSamplers(1, 1, &m_sampleStateClamp);
+		deviceContext->PSSetSamplers(2, 1, &m_sampleStateWrap);
+//		deviceContext->OMSetDepthStencilState(LVState2, 0);
 
 		// Render the geometry.
 		deviceContext->DrawIndexed(indexCount, 0, 0);
@@ -353,6 +369,31 @@ namespace light
 
 
 
+		// Create a wrap texture sampler state description.
+		samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+		samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+		samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+		samplerDesc.MipLODBias = 0.0f;
+		samplerDesc.MaxAnisotropy = 1;
+		samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+		samplerDesc.BorderColor[0] = 0;
+		samplerDesc.BorderColor[1] = 0;
+		samplerDesc.BorderColor[2] = 0;
+		samplerDesc.BorderColor[3] = 0;
+		samplerDesc.MinLOD = 0;
+		samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+		// Create the texture sampler state.
+		V( device->CreateSamplerState(&samplerDesc, &m_sampleStateWrap));
+
+		// Create a clamp texture sampler state description.
+		samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+		samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+		samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+
+		// Create the texture sampler state.
+		V( device->CreateSamplerState(&samplerDesc, &m_sampleStateClamp));
 	}
 
 	void ReleaseLight()
@@ -403,5 +444,17 @@ namespace light
 		SAFE_RELEASE(LVState2);
 		SAFE_RELEASE(front_state);
 		SAFE_RELEASE(back_state);
+		// Release the sampler states.
+		if (m_sampleStateWrap)
+		{
+			m_sampleStateWrap->Release();
+			m_sampleStateWrap = 0;
+		}
+
+		if (m_sampleStateClamp)
+		{
+			m_sampleStateClamp->Release();
+			m_sampleStateClamp = 0;
+		}
 	}
 }

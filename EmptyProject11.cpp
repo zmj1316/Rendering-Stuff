@@ -50,6 +50,8 @@ float m_BlendFactorStored11[4];
 UINT m_SampleMaskStored11;
 ID3D11SamplerState* m_pSamplerStateStored11;
 
+bool keymaps[4] = {false};
+
 void StoreD3D11State(ID3D11DeviceContext* pd3dImmediateContext)
 {
 	pd3dImmediateContext->OMGetDepthStencilState(&m_pDepthStencilStateStored11, &m_StencilRefStored11);
@@ -75,6 +77,7 @@ ID3D11Buffer* g_pOrthVertexBuffer = NULL;
 ID3D11Buffer* g_pOrthIndexBuffer = NULL;
 #include "deferred.h"
 #include "light.h"
+#include "shadow.h"
 CDXUTTextHelper* g_pTxtHelper = NULL;
 
 struct CB_VS_PER_OBJECT
@@ -109,7 +112,7 @@ struct VERTEX
 };
 struct InstanceType
 {
-	XMFLOAT3 position;
+	XMFLOAT4 position;
 };
 //--------------------------------------------------------------------------------------
 // Reject any D3D11 devices that aren't acceptable by returning false
@@ -307,20 +310,26 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 	DXUT_SetDebugName(g_pVertexBuffer, "VB");
 
 
-	InstanceType instances[1024];
-	for (int i = 0; i < 32; ++i)
+	InstanceType instances[LENGTH * LENGTH];
+	for (int i = 0; i < LENGTH; ++i)
 	{
 		srand(abs(i));
-		for (int j = 0; j < 32; ++j)
+		for (int j = 0; j < LENGTH; ++j)
 		{
-			instances[i * 32 + j].position.x = 5 * (i - 16) + rand()*2.0 / RAND_MAX;
-			instances[i * 32 + j].position.y = 5 * (j - 16) + rand()*2.0 / RAND_MAX;
-			instances[i * 32 + j].position.z = 0;
+			instances[i * LENGTH + j].position.x = 5 * (i - LENGTH /2) + rand()*2.0 / RAND_MAX;
+			instances[i * LENGTH + j].position.y = 5 * (j - LENGTH / 2) + rand()*2.0 / RAND_MAX;
+			instances[i * LENGTH + j].position.z = 0;
+			instances[i * LENGTH + j].position.w = 1;
 		}
 	}
+//	instances[LENGTH / 2].position.w = 2;
+	instances[0].position.w = 30;
+	instances[0].position.z = 31;
+	instances[0].position.x = 0;
+	instances[0].position.y = 0;
 	ZeroMemory(&bufferDesc, sizeof(bufferDesc));
 
-	bufferDesc.ByteWidth = sizeof(InstanceType) * 1024;
+	bufferDesc.ByteWidth = sizeof(InstanceType) * LENGTH * LENGTH;
 	bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
 	bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -397,7 +406,7 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 	depthDisabledStencilDesc.DepthEnable = true;
 	depthDisabledStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 	depthDisabledStencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
-	depthDisabledStencilDesc.StencilEnable = true;
+	depthDisabledStencilDesc.StencilEnable = false;
 	depthDisabledStencilDesc.StencilReadMask = 0xFF;
 	depthDisabledStencilDesc.StencilWriteMask = 0xFF;
 	depthDisabledStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
@@ -427,7 +436,7 @@ HRESULT CALLBACK OnD3D11CreateDevice(ID3D11Device* pd3dDevice, const DXGI_SURFAC
 
 
 	light::InitLight(pd3dDevice);
-
+	shadow::InitShadow(pd3dDevice);
 	return S_OK;
 }
 
@@ -451,7 +460,7 @@ HRESULT CALLBACK OnD3D11ResizedSwapChain(ID3D11Device* pd3dDevice, IDXGISwapChai
 	g_Camera.SetWindow(pBackBufferSurfaceDesc->Width, pBackBufferSurfaceDesc->Height);
 	g_Camera.SetButtonMasks();
 	g_Camera.SetAttachCameraToModel(false);
-	g_Camera.SetEnablePositionMovement(true);
+//	g_Camera.SetEnablePositionMovement(true);
 
 	g_HUD.SetLocation(pBackBufferSurfaceDesc->Width - 170, 0);
 	g_HUD.SetSize(170, 170);
@@ -539,6 +548,32 @@ HRESULT CALLBACK OnD3D11ResizedSwapChain(ID3D11Device* pd3dDevice, IDXGISwapChai
 void CALLBACK OnFrameMove(double fTime, float fElapsedTime, void* pUserContext)
 {
 	g_Camera.FrameMove(fElapsedTime);
+	float speed = 1000.0f;
+	if(keymaps[0])
+	{
+		shadow::lightPosition.y += fElapsedTime * speed;
+		shadow::lookat.y += fElapsedTime * speed;
+		keymaps[0] = false;
+	}
+	if (keymaps[1])
+	{
+		shadow::lightPosition.y -= fElapsedTime * speed;
+		shadow::lookat.y -= fElapsedTime * speed;
+		keymaps[1] = false;
+	}
+	if (keymaps[2])
+	{
+		shadow::lightPosition.x -= fElapsedTime * speed;
+		shadow::lookat.x -= fElapsedTime * speed;
+		keymaps[2] = false;
+	}
+	if (keymaps[3])
+	{
+		shadow::lightPosition.x += fElapsedTime * speed;
+		shadow::lookat.x += fElapsedTime * speed;
+		keymaps[3] = false;
+	}
+
 }
 
 
@@ -584,10 +619,8 @@ void RenderText()
 
 void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmediateContext)
 {
-	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthenabledStencilState, 1);
+//	DXUTSetupD3D11Views(pd3dImmediateContext);
 
-	deferred::SetRenderTargets(pd3dImmediateContext);
-	deferred::ClearRenderTargets(pd3dImmediateContext, 0, 0, 0, 1);
 	D3DXMATRIX mRotation;
 	D3DXMATRIX mTranslationX, mTranslationZ;
 	D3DXMATRIX mWorld;
@@ -616,17 +649,26 @@ void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImm
 	// Set the array of pointers to the vertex and instance buffers.
 	bufferPointers[0] = g_pVertexBuffer;
 	bufferPointers[1] = g_pInstanceBuffer;
-	pd3dImmediateContext->PSSetSamplers(0, 1, &g_pSamLinear);
 
 	pd3dImmediateContext->IASetVertexBuffers(0, 2, bufferPointers, strides, offsets);
 	pd3dImmediateContext->IASetIndexBuffer(g_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 	pd3dImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	shadow::Render(pd3dImmediateContext, 36, mWorld);
+//	ID3D11RenderTargetView* pRTV = DXUTGetD3D11RenderTargetView();
+//	ID3D11DepthStencilView* pDSV = DXUTGetD3D11DepthStencilView();
+//	float ClearColor[4] = { 0,0,0, 0.0f };
+//	pd3dImmediateContext->ClearRenderTargetView(pRTV, ClearColor);
+//	pd3dImmediateContext->ClearDepthStencilView(pDSV, D3D11_CLEAR_DEPTH, 1.0, 0);
+	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthenabledStencilState, 1);
+	pd3dImmediateContext->PSSetSamplers(0, 1, &g_pSamLinear);
 	deferred::Render(pd3dImmediateContext, 36, mWorld, mView, mProj, g_pTexture);
+//	DXUTSetupD3D11Views(pd3dImmediateContext);
 	DXUTSetupD3D11Views(pd3dImmediateContext);
 }
 
 void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmediateContext)
 {
+	return;
 	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthDisabledStencilState, 1);
 	pd3dImmediateContext->OMSetBlendState(g_pBlendState,nullptr,0xFFFFFFFF);
 	unsigned int stride;
@@ -651,42 +693,41 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 	D3DXMATRIX	invProj;
 	invProj = mProj;
 	D3DXMatrixInverse(&invProj, nullptr, &invProj);
-	const int length = 32;
+	const int length = 1;
 	for (int i = 0; i < length; ++i)
 	{
 		srand(i);
 		for (int j = 0; j < length; ++j)
 		{
-			ID3D11DepthStencilView* pDSV = DXUTGetD3D11DepthStencilView();
-			pd3dImmediateContext->ClearDepthStencilView(pDSV, D3D11_CLEAR_STENCIL, 1.0, 0xFF);
-			// Set the vertex buffer to active in the input assembler so it can be rendered.
-			pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pVertexBuffer, &stride, &offset);
-
-			// Set the index buffer to active in the input assembler so it can be rendered.
-			pd3dImmediateContext->IASetIndexBuffer(g_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-			light::LV_pass(pd3dImmediateContext, 36, mWorld, mView, mProj,
-				deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1],
-				deferred::m_shaderResourceViewArray[2],
-				D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z),
-				D3DXVECTOR3((i - length / 2) * 5, (j - length / 2) * 5, -3),
-				D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
-				*g_Camera.GetEyePt(),
-				invProj);
+//			ID3D11DepthStencilView* pDSV = DXUTGetD3D11DepthStencilView();
+//			pd3dImmediateContext->ClearDepthStencilView(pDSV, D3D11_CLEAR_STENCIL, 1.0, 0xFF);
+//			// Set the vertex buffer to active in the input assembler so it can be rendered.
+//			pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pVertexBuffer, &stride, &offset);
+//
+//			// Set the index buffer to active in the input assembler so it can be rendered.
+//			pd3dImmediateContext->IASetIndexBuffer(g_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+//			light::LV_pass(pd3dImmediateContext, 36, mWorld, mView, mProj,
+//				deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1],
+//				deferred::m_shaderResourceViewArray[2],
+//				D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z),
+//				D3DXVECTOR3((i - length / 2) * 5, (j - length / 2) * 5, -3),
+//				D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
+//				*g_Camera.GetEyePt(),
+//				invProj);
 
 			// Set the vertex buffer to active in the input assembler so it can be rendered.
 			pd3dImmediateContext->IASetVertexBuffers(0, 1, &g_pOrthVertexBuffer, &stride, &offset);
 
 			// Set the index buffer to active in the input assembler so it can be rendered.
 			pd3dImmediateContext->IASetIndexBuffer(g_pOrthIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-	
-			float ClearColor[4] = { 0,0,0, 0.0f };
 
 			light::Render(pd3dImmediateContext, 6, mWorld, m_baseViewMatrix, m_orthoMatrix,
 				deferred::m_shaderResourceViewArray[0], deferred::m_shaderResourceViewArray[1], 
 					deferred::m_shaderResourceViewArray[2],
 				D3DXVECTOR3(vLightDir.x, vLightDir.y, vLightDir.z),
-				D3DXVECTOR3((i - length/2) * 5, (j - length/2) * 5, -3),
-				D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
+				shadow::lightPosition,
+				D3DXVECTOR3(0.7,0.8,0.87),
+				//D3DXVECTOR3(0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX, 0.5*rand() / RAND_MAX),
 				*g_Camera.GetEyePt(),
 				invProj,mView);
 		}
@@ -836,6 +877,7 @@ void CALLBACK OnD3D11DestroyDevice(void* pUserContext)
 	SAFE_RELEASE(g_pInstanceBuffer);
 	deferred::ReleaseDefferred();
 	light::ReleaseLight();
+	shadow::ReleaseShadow();
 }
 
 
@@ -879,7 +921,25 @@ LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
 //--------------------------------------------------------------------------------------
 void CALLBACK OnKeyboard(UINT nChar, bool bKeyDown, bool bAltDown, void* pUserContext)
 {
-
+	if (bKeyDown)
+	{
+		if(nChar == VK_NUMPAD8)
+		{
+			keymaps[0] = true;
+		}
+		if (nChar == VK_NUMPAD2)
+		{
+			keymaps[1] = true;
+		}
+		if (nChar == VK_NUMPAD4)
+		{
+			keymaps[2] = true;
+		}
+		if (nChar == VK_NUMPAD6)
+		{
+			keymaps[3] = true;
+		}
+	}
 }
 
 
