@@ -11,12 +11,14 @@ namespace shadow
 	ID3D11InputLayout *m_layout;
 	ID3D11Buffer *m_matrixBuffer;
 
-	int m_textureWidth = 2048;
-	int m_textureHeight = 2048;
+	int m_textureWidth = 1024;
+	int m_textureHeight = 1024;
 	ID3D11Texture2D *m_renderTargetTexture;
 	ID3D11RenderTargetView *m_renderTargetView;
 	ID3D11ShaderResourceView *m_shaderResourceView;
 	D3D11_VIEWPORT m_viewport;
+	ID3D11Texture2D* m_depthStencilBuffer;
+	ID3D11DepthStencilView* m_depthStencilView;
 
 	D3DXVECTOR3 lightPosition;
 	D3DXVECTOR3 lookat = D3DXVECTOR3(0, 0, 0);
@@ -54,7 +56,7 @@ namespace shadow
 	void SetRenderTargets(ID3D11DeviceContext *deviceContext)
 	{
 		// Bind the render target view array and depth stencil buffer to the output render pipeline.
-		deviceContext->OMSetRenderTargets(1, &m_renderTargetView, DXUTGetD3D11DepthStencilView());
+		deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilView);
 
 		// Set the viewport.
 		deviceContext->RSSetViewports(1, &m_viewport);
@@ -76,8 +78,7 @@ namespace shadow
 		deviceContext->ClearRenderTargetView(m_renderTargetView, color);
 
 		// Clear the depth buffer.
-		deviceContext->ClearDepthStencilView(DXUTGetD3D11DepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
-		deviceContext->ClearDepthStencilView(DXUTGetD3D11DepthStencilView(), D3D11_CLEAR_STENCIL, 1.0f, 0);
+		deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 	}
 
 	void Render(ID3D11DeviceContext *deviceContext, int indexCount, D3DXMATRIX worldMatrix)
@@ -128,6 +129,7 @@ namespace shadow
 		// Render the geometry.
 		//		deviceContext->DrawIndexed(indexCount, 0, 0);
 		deviceContext->DrawIndexedInstanced(indexCount, LENGTH * LENGTH, 0, 0, 0);
+		deviceContext->OMSetRenderTargets(0, nullptr, nullptr);
 	}
 
 
@@ -255,6 +257,38 @@ namespace shadow
 		m_viewport.MaxDepth = 1.0f;
 		m_viewport.TopLeftX = 0.0f;
 		m_viewport.TopLeftY = 0.0f;
+
+		D3D11_TEXTURE2D_DESC depthBufferDesc;
+		D3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc;
+		// Initialize the description of the depth buffer.
+		ZeroMemory(&depthBufferDesc, sizeof(depthBufferDesc));
+
+		// Set up the description of the depth buffer.
+		depthBufferDesc.Width = m_textureWidth;
+		depthBufferDesc.Height = m_textureHeight;
+		depthBufferDesc.MipLevels = 1;
+		depthBufferDesc.ArraySize = 1;
+		depthBufferDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+		depthBufferDesc.SampleDesc.Count = 1;
+		depthBufferDesc.SampleDesc.Quality = 0;
+		depthBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+		depthBufferDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+		depthBufferDesc.CPUAccessFlags = 0;
+		depthBufferDesc.MiscFlags = 0;
+
+		// Create the texture for the depth buffer using the filled out description.
+		V(device->CreateTexture2D(&depthBufferDesc, NULL, &m_depthStencilBuffer));
+
+		// Initailze the depth stencil view description.
+		ZeroMemory(&depthStencilViewDesc, sizeof(depthStencilViewDesc));
+
+		// Set up the depth stencil view description.
+		depthStencilViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+		depthStencilViewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+		depthStencilViewDesc.Texture2D.MipSlice = 0;
+
+		// Create the depth stencil view.
+		V(device->CreateDepthStencilView(m_depthStencilBuffer, &depthStencilViewDesc, &m_depthStencilView));
 	}
 
 	void ReleaseShadow()
@@ -290,5 +324,17 @@ namespace shadow
 		SAFE_RELEASE(m_renderTargetTexture);
 		SAFE_RELEASE(m_renderTargetView);
 		SAFE_RELEASE(m_shaderResourceView);
+
+		if (m_depthStencilView)
+		{
+			m_depthStencilView->Release();
+			m_depthStencilView = 0;
+		}
+
+		if (m_depthStencilBuffer)
+		{
+			m_depthStencilBuffer->Release();
+			m_depthStencilBuffer = 0;
+		}
 	}
 }

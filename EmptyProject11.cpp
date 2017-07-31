@@ -619,7 +619,7 @@ void RenderText()
 
 void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmediateContext)
 {
-//	DXUTSetupD3D11Views(pd3dImmediateContext);
+	DXUTSetupD3D11Views(pd3dImmediateContext);
 
 	D3DXMATRIX mRotation;
 	D3DXMATRIX mTranslationX, mTranslationZ;
@@ -654,12 +654,14 @@ void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImm
 	pd3dImmediateContext->IASetIndexBuffer(g_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 	pd3dImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	shadow::Render(pd3dImmediateContext, 36, mWorld);
+	DXUTSetupD3D11Views(pd3dImmediateContext);
+
 //	ID3D11RenderTargetView* pRTV = DXUTGetD3D11RenderTargetView();
 //	ID3D11DepthStencilView* pDSV = DXUTGetD3D11DepthStencilView();
 //	float ClearColor[4] = { 0,0,0, 0.0f };
 //	pd3dImmediateContext->ClearRenderTargetView(pRTV, ClearColor);
 //	pd3dImmediateContext->ClearDepthStencilView(pDSV, D3D11_CLEAR_DEPTH, 1.0, 0);
-	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthenabledStencilState, 1);
+//	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthenabledStencilState, 1);
 	pd3dImmediateContext->PSSetSamplers(0, 1, &g_pSamLinear);
 	deferred::Render(pd3dImmediateContext, 36, mWorld, mView, mProj, g_pTexture);
 //	DXUTSetupD3D11Views(pd3dImmediateContext);
@@ -668,7 +670,7 @@ void RenderSceneToTexture(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImm
 
 void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmediateContext)
 {
-	return;
+//	return;
 	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthDisabledStencilState, 1);
 	pd3dImmediateContext->OMSetBlendState(g_pBlendState,nullptr,0xFFFFFFFF);
 	unsigned int stride;
@@ -737,6 +739,7 @@ void RenderFullScreen(ID3D11Device* pd3dDevice, ID3D11DeviceContext* pd3dImmedia
 	pd3dImmediateContext->PSSetShaderResources(0, 1, t);
 	pd3dImmediateContext->PSSetShaderResources(1, 1, t);
 	pd3dImmediateContext->PSSetShaderResources(2, 1, t);
+	pd3dImmediateContext->PSSetShaderResources(3, 1, t);
 	pd3dImmediateContext->OMSetDepthStencilState(g_pDepthenabledStencilState, 1);
 }
 

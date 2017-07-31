@@ -98,7 +98,7 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
 
 		// Compare the depth of the shadow map value and the depth of the light to determine whether to shadow or to light this pixel.
 		// If the light is in front of the object then light the pixel, if not then shadow this pixel since an object (occluder) is casting a shadow on it.
-		//if (lightDepthValue < depthValue)
+		if (lightDepthValue < depthValue)
 		{
 			float3 lightDir = lightPosition - position; //3D position in space of the surface
 			float distance = length(lightDir);
